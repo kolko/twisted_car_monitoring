@@ -7,7 +7,7 @@ from twisted.internet import reactor
 from twisted.python import log
 
 import settings
-from db import DB, Point
+from db import DB, Point, CarNotFound
 from tools import debug_log
 
 
@@ -23,24 +23,23 @@ class Aggregator(object):
 
     def login_car(self):
         """Новый автомобиль"""
-        car_id = DB().create_car()
-        return car_id
+        car = DB().create_car()
+        return car.id
 
-    def logout_car(self, car_id):
-        DB().logout_car(car_id)
+    def logout_car(self, car_id, reason="Normal logout from aggregator"):
+        car = DB().get_car(car_id)
+        car.logout(reason)
 
     def new_position_car(self, car_id, position):
-        db = DB()
-        if position != db.get_car_position(car_id):
-            db.new_position_car(car_id, position)
+        car = DB().get_car(car_id)
+        car.update_position(position)
 
     def test_cars_by_update_time_expired(self):
         debug_log("Run test_cars_by_update_time_expired")
-        db = DB()
-        for car_id in db.get_all_cars():
-            if db.get_car_last_update(car_id) < datetime.now() - settings.CAR_EXPIRED_TIME:
-                debug_log("Drop car by timeout {0}".format(car_id))
-                self.logout_car(car_id)
+        for car in DB().get_all_cars():
+            if car.last_update < datetime.now() - settings.CAR_EXPIRED_TIME:
+                debug_log("Drop car by timeout {0}".format(car))
+                self.logout_car(car.id, "Logout by timeout")
         reactor.callLater(settings.CAR_EXPIRED_LOOP_INTERVAL, self.test_cars_by_update_time_expired)
 
 
@@ -80,7 +79,10 @@ class WebAggregator(resource.Resource):
             debug_log("Try logout without car_id in session")
             self.json_err("Already logged out")
         session.expire()
-        Aggregator().logout_car(car_id)
+        try:
+            Aggregator().logout_car(car_id)
+        except CarNotFound:
+            pass
         debug_log("Logged out car id: {0}".format(car_id))
         return self.json_ok()
 
@@ -95,7 +97,11 @@ class WebAggregator(resource.Resource):
         position = Point(w, l)
         #todo validate w and l
         debug_log("Update position {0}: {1}".format(car_id, position))
-        Aggregator().new_position_car(car_id, position)
+        try:
+            Aggregator().new_position_car(car_id, position)
+        except CarNotFound:
+            session.expire()
+            return self.json_err("You must login first")
         return self.json_ok()
 
     @staticmethod

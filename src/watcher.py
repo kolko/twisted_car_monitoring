@@ -11,7 +11,7 @@ from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerF
 import settings
 from db import DB, Point, CarNotFound
 from db import EventUpdatePosition, EventDisconnect
-from tools import debug_log
+from tools import debug_log, distance
 
 
 class Watcher(object):
@@ -33,14 +33,14 @@ class WatcherSite(resource.Resource):
         res_html = ""
         db = DB()
         for car in db.get_all_cars():
-            res_html += "<p><a href='/watch_car?car_id={0}'>{1}</a>".format(car.uid, car)
+            res_html += "<p><a href='/watch_car?car_id={0}'>{1}</a>".format(car.id, car)
         return res_html
 
     def watch_car(self, request):
         car_id = request.args.get('car_id', None)
-        if not car_id:
+        if not car_id and not car_id.is_digit():
             return "Not found"
-        car_id = car_id[0]
+        car_id = int(car_id[0])
         db = DB()
         try:
             car = db.get_car(car_id)
@@ -49,45 +49,58 @@ class WatcherSite(resource.Resource):
         with open('html/watch_car_websocket.html', 'r') as f:
             html = f.read()
         socket_port = settings.WATCHER_WEBSOCKET_PORT
-        html = Template(html).substitute({'car_id': car.uid,
+        html = Template(html).substitute({'car_id': car.id,
                             'socket_port': str(socket_port)})
         return html
 
     def get_near(self, request):
         latitude = request.args['latitude'][0]
         longitude = request.args['longitude'][0]
+        format_json = request.args.get('json', None)
         position = Point(latitude, longitude)
         res_html = ""
         db = DB()
-        for car in db.find_near(position):
-            res_html += "<p><a href='/watch_car?car_id={0}'>{1}</a>".format(car.uid, car)
+        if format_json:
+            res = []
+            for car in db.find_near(position):
+                res.append(car.data_as_json())
+            res_html = json.dumps(res)
+        else:
+            for car in db.find_near(position):
+                distance_str = '({0:0.3f} km)'.format(distance(position, car.position))
+                res_html += "<p><a href='/watch_car?car_id={0}'>{1} {2}</a>".format(car.id, car, distance_str)
         return res_html
 
 
 class WatcherWebsocket(WebSocketServerProtocol):
     def __init__(self):
-        self.car_id = None
+        self.car = None
 
     def onConnect(self, request):
         if request.path != '/watch_car':
             self.closedByMe()
         car_id = request.params.get('car_id', None)
-        if not car_id or not car_id[0].is_digit():
+        if not car_id or not car_id[0].isdigit():
             self.closedByMe()
-        self.car_id = int(car_id[0])
-        db = DB()
-        db.register_handler(self.car_id, self._event_handler)
-        debug_log("Websocket connect for car_id: {0}".format(self.car_id))
+        car_id = int(car_id[0])
+        self.car = DB().get_car(car_id)
+        self.car.add_handler(self._event_handler)
+        debug_log("Websocket connect for car: {0}".format(self.car))
 
     def onClose(self, wasClean, code, reason):
         debug_log("WebSocket connection closed: {0}".format(reason))
+        if self.car:
+            self.car.del_handler(self._event_handler)
+        self.car = None
 
-    def _event_handler(self, event, car_id):
-        assert car_id == self.car_id
-        debug_log("Alert {0} from car_id: {1}".format(event, car_id))
+    def _event_handler(self, event, car):
+        assert car == self.car
+        debug_log("Alert {0} from car: {1}".format(event, car))
+
         if isinstance(event, EventUpdatePosition):
-            res = {"event": "position_update", "position": event.position.data_as_json()}
+            res = {"event": "position_update", "position": event.new_position.data_as_json()}
             self.sendMessage(json.dumps(res))
+
         if isinstance(event, EventDisconnect):
             res = {"event": "car_disconnect"}
             d = self.sendMessage(json.dumps(res))

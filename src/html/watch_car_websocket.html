@@ -6,7 +6,7 @@
     <script src="//api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
     <style>
     #map {
-        width: 1000px;
+        width: 900px;
         height: 400px;
     }
     </style>
@@ -14,61 +14,85 @@
 <body>
 
 <script>
-    var myMap;
-    var car = null;
-    ymaps.ready(init);
+    function log(msg) {
+        var target = document.getElementById("received");
+        var d = new Date;
+        target.value = target.value + "[" + d.toLocaleTimeString() + "] " + msg + '\n';
+    }
 
+    var find_car_array = [];
+
+    var myMap;
+    ymaps.ready(init);
     function init () {
         myMap = new ymaps.Map("map", {
             center: [56.835567, 60.590891],
             zoom: 9
         });
-    }
+        new_car($car_id);
+        myMap.events.add('click', function (e) {
+            var coord = e.get('coords');
+            $$.getJSON("/get_near", {
+                                'json': 1,
+                                'latitude': coord[0],
+                                'longitude': coord[1]
+                            },
+                function(data) {
+                    find_car_array.forEach(function(val){
+                        val();
+                    });
+                    find_car_array = [];
+                    data.forEach(function(val){
+                        var new_destroy_func = new_car(val['id']);
+                        find_car_array.push(new_destroy_func);
+                    });
+            });
 
-    function move_car(car_location) {
-        if (car != null){
-            myMap.geoObjects.remove(car);
-        }
-        car = new ymaps.GeoObject({
-            geometry: {
-                type: "Point",
-                coordinates: (car_location['latitude'], car_location['longitude'])
-        }}, {
-            preset: 'islands#blackStretchyIcon',
-            // Метку можно перемещать.
-            draggable: true
+
         });
-
-//        car = new ymaps.Placemark([location['w'], location['l']]);
-        myMap.geoObjects.add(car);
     }
 
-    function log(msg) {
-        var target = document.getElementById("received");
-        target.value = target.value + msg + '\n';
-    }
-
-    var ws = new WebSocket("ws://127.0.0.1:$socket_port/watch_car?car_id=$car_id");
-    ws.onmessage = function(evt) {
-        var data = evt.data;
-        data = jQuery.parseJSON(data);
-        log(data['event'] + ' - ' + data['position']);
-        if (data['event'] == 'position_update') {
-            move_car(data['position']);
+    function new_car(car_id){
+        var car = null;
+        function move_car(car_location) {
+            if (car != null){
+                myMap.geoObjects.remove(car);
+            }
+            car = new ymaps.GeoObject({
+                geometry: {
+                    type: "Point",
+                    coordinates: [car_location['latitude'], car_location['longitude']]
+            }});
+            myMap.geoObjects.add(car);
         }
-    };
-    ws.onclose = function(evt) {
-        log('closed!');
-    }
-    ws.onerror = function(evt) {
-        log('error!');
+
+        var ws = new WebSocket("ws://127.0.0.1:$socket_port/watch_car?car_id="+car_id);
+        ws.onmessage = function(evt) {
+            var data = evt.data;
+            data = jQuery.parseJSON(data);
+            log(data['event'] + ' - ' + [data['position']['latitude'], data['position']['longitude']]);
+            if (data['event'] == 'position_update') {
+                move_car(data['position']);
+            }
+        };
+        ws.onclose = function(evt) {
+            log('closed!');
+        }
+        ws.onerror = function(evt) {
+            log('error!');
+        }
+        return function destroy(){
+            ws.close();
+            myMap.geoObjects.remove(car);
+            car = null;
+        }
     }
 </script>
 
 <table>
     <tr>
         <td>
-            <textarea name="received" id="received" cols="40" rows="20"></textarea>
+            <textarea name="received" id="received" cols="50" rows="20"></textarea>
         </td>
         <td>
             <div id="map"></div>
