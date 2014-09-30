@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <script src="//code.jquery.com/jquery-latest.min.js" type='text/javascript'></script>
+    <script src="//api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+    <style>
+    #map {
+        width: 1000px;
+        height: 400px;
+    }
+    </style>
+</head>
+<body>
+
+<script>
+    var myMap;
+    var car = null;
+    ymaps.ready(init);
+
+    function init () {
+        myMap = new ymaps.Map("map", {
+            center: [56.835567, 60.590891],
+            zoom: 9
+        });
+    }
+
+    function move_car(car_location) {
+        if (car != null){
+            myMap.geoObjects.remove(car);
+        }
+        car = new ymaps.GeoObject({
+            geometry: {
+                type: "Point",
+                coordinates: (car_location['latitude'], car_location['longitude'])
+        }}, {
+            preset: 'islands#blackStretchyIcon',
+            // Метку можно перемещать.
+            draggable: true
+        });
+
+//        car = new ymaps.Placemark([location['w'], location['l']]);
+        myMap.geoObjects.add(car);
+    }
+
+    function log(msg) {
+        var target = document.getElementById("received");
+        target.value = target.value + msg + '\n';
+    }
+
+    var ws = new WebSocket("ws://127.0.0.1:$socket_port/watch_car?car_id=$car_id");
+    ws.onmessage = function(evt) {
+        var data = evt.data;
+        data = jQuery.parseJSON(data);
+        log(data['event'] + ' - ' + data['position']);
+        if (data['event'] == 'position_update') {
+            move_car(data['position']);
+        }
+    };
+    ws.onclose = function(evt) {
+        log('closed!');
+    }
+    ws.onerror = function(evt) {
+        log('error!');
+    }
+</script>
+
+<table>
+    <tr>
+        <td>
+            <textarea name="received" id="received" cols="40" rows="20"></textarea>
+        </td>
+        <td>
+            <div id="map"></div>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
