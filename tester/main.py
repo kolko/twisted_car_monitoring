@@ -40,8 +40,9 @@ class BaseCarRider(object):
         log.msg("Logged out")
 
     @defer.inlineCallbacks
-    def send_location(self, w, l):
-        response = yield self.agent.request('GET', self.url + "data?w={0:.6f}&l={1:.6f}".format(w, l))
+    def send_location(self, latitude, longitude):
+        url = self.url + "data?w={0:.6f}&l={1:.6f}".format(latitude, longitude)
+        response = yield self.agent.request('GET', url)
         assert response.code == 200
         body = yield readBody(response)
         data = json.loads(body)
@@ -64,7 +65,8 @@ class BaseCarRider(object):
                 l = 60552843
             if l > 60574815:
                 l = 60574815
-            yield task.deferLater(reactor, 0, self.send_location, w/1000000.0, l/1000000.0)
+            yield task.deferLater(reactor, 0, self.send_location,
+                                  w/1000000.0, l/1000000.0)
             yield sleep(settings.WORKER_SLEEP_TIME)
         yield task.deferLater(reactor, 0, self.logout)
 
@@ -86,9 +88,11 @@ class LoginLogoutTest(BaseCarRider):
                 l = 60552843
             if l > 60574815:
                 l = 60574815
-            yield task.deferLater(reactor, 0, self.send_location, w/1000000.0, l/1000000.0)
+            yield task.deferLater(reactor, 0, self.send_location,
+                                  w/1000000.0, l/1000000.0)
             yield task.deferLater(reactor, 0, self.logout)
             yield sleep(settings.WORKER_SLEEP_TIME)
+
 
 class DriverTest(BaseCarRider):
     @defer.inlineCallbacks
@@ -111,8 +115,6 @@ class DriverTest(BaseCarRider):
                     move_by_w = 1
                 else:
                     move_by_l = 1
-
-
 
             if random.randrange(10) > 5:
                 speed = random.random()
