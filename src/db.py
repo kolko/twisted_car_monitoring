@@ -11,24 +11,18 @@ class CarNotFound(Exception):
 
 
 class DB(object):
-    # TODO: выпилить синглтоны
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(DB, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
-
     def __init__(self):
-        if not getattr(self, 'car_storage', None):
-            self.car_storage = {}
-            self.map = Map()
+        self.car_storage = {}
+        self.map = Map()
 
     def create_car(self):
         new_car = Car(self)
         self.car_storage[new_car.id] = new_car
         new_car.add_handler(self.map.handle_car)
         return new_car
+
+    def _handle_destroy_car(self, car_id):
+        del self.car_storage[car_id]
 
     def get_car(self, car_id):
         car = self.car_storage.get(car_id, None)

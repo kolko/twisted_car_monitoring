@@ -42,7 +42,11 @@ class Point(JsonSlotsMixin):
         return '{0},{1}'.format(*self.as_str_list())
 
     def _convert_number(self, num):
-        num_int = int(float(num) * self.PARITY_NUM)
+        try:
+            num = float(str(num))
+        except ValueError:
+            raise PositionValidationError
+        num_int = int(num * self.PARITY_NUM)
         return num_int
 
     def _number_as_str(self, num):
@@ -55,10 +59,9 @@ class Point(JsonSlotsMixin):
             self._number_as_str(self._longitude)
         )
 
-    def as_list_integer(self):
+    def as_raw_list_integer(self):
         return (
-            self._convert_number(self._latitude),
-            self._convert_number(self._longitude),
+            self._latitude, self._longitude,
         )
 
     @staticmethod

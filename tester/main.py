@@ -41,7 +41,7 @@ class BaseCarRider(object):
 
     @defer.inlineCallbacks
     def send_location(self, latitude, longitude):
-        url = self.url + "data?w={0:.6f}&l={1:.6f}".format(latitude, longitude)
+        url = self.url + "data?latitude={0:.6f}&longitude={1:.6f}".format(latitude, longitude)
         response = yield self.agent.request('GET', url)
         assert response.code == 200
         body = yield readBody(response)
@@ -132,15 +132,22 @@ class DriverTest(BaseCarRider):
             yield sleep(settings.WORKER_SLEEP_TIME)
         yield task.deferLater(reactor, 0, self.logout)
 
+def start_work(car):
+    def on_error(msg):
+        log.msg("Car fail {0}. Restarting...".format(msg))
+        start_work(car)
+    d = car.work()
+    d.addErrback(on_error)
+
 if __name__ == "__main__":
     # log.startLogging(sys.stdout)
     for x in xrange(settings.RANDOM_TEST):
         car = BaseCarRider(settings.JOIN_IP, settings.JOIN_PORT)
-        reactor.callLater(0, car.work)
+        start_work(car)
     for x in xrange(settings.LOGINLOGOUT_TEST):
         car = LoginLogoutTest(settings.JOIN_IP, settings.JOIN_PORT)
-        reactor.callLater(0, car.work)
+        start_work(car)
     for x in xrange(settings.DRIVE_TEST):
         car = DriverTest(settings.JOIN_IP, settings.JOIN_PORT)
-        reactor.callLater(0, car.work)
+        start_work(car)
     reactor.run()

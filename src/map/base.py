@@ -21,7 +21,8 @@ class Map(object):
             self._handle_car_logout(car)
 
     def _handle_car_logout(self, car):
-        self.map.del_car(car.id, car.position)
+        if car.position:
+            self.map.del_car(car.id, car.position)
 
     def _handle_car_new_position(self, car, old_position, new_position):
         if not old_position:
@@ -36,11 +37,11 @@ class RtreeMap(object):
         self.rtree = index.Index()
 
     def add_car(self, car_id, position):
-        p = position.as_list_integer()
+        p = position.as_raw_list_integer()
         self.rtree.insert(car_id, p * 2)
 
     def del_car(self, car_id, old_position):
-        p = old_position.as_list_integer()
+        p = old_position.as_raw_list_integer()
         self.rtree.delete(car_id, p * 2)
 
     def move_car(self, car_id, old_position, new_position):
@@ -48,5 +49,5 @@ class RtreeMap(object):
         self.add_car(car_id, new_position)
 
     def find_car(self, position, count):
-        return list(self.rtree.nearest(position.as_list_integer(),
+        return list(self.rtree.nearest(position.as_raw_list_integer(),
                                        num_results=count))

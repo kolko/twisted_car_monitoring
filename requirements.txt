@@ -1,0 +1,7 @@
+Rtree==0.8.0
+Twisted==14.0.2
+Twisted-Web==14.0.2
+Twisted-Words==14.0.2
+autobahn==0.9.1
+pytest==2.6.3
+pytest-twisted==1.5

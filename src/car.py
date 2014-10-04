@@ -19,16 +19,14 @@ class EventUpdatePosition(CarEvent):
         self.new_position = new_position
 
 
-I = 1
-
-
 class Car(JsonSlotsMixin):
     JSON_SLOTS = ['id', 'position', 'last_update']
+    ID_INCREMENT = 1
 
     def __init__(self, db):
         global I
-        self.id = I
-        I += 1
+        self.id = Car.ID_INCREMENT
+        Car.ID_INCREMENT += 1
         self.db = db
         self.position = None
         self.last_update = datetime.now()
@@ -46,6 +44,7 @@ class Car(JsonSlotsMixin):
 
     def logout(self, reason):
         self.notify_handlers(EventDisconnect(reason))
+        self.db._handle_destroy_car(self.id)
 
     def add_handler(self, handler):
         if handler not in self.handlers:
